@@ -37,5 +37,11 @@
   "exclude": [
     "node_modules",
     ".next"
-  ]
+  ],
+  "ts-node": {
+    "compilerOptions": {
+      "module": "CommonJS",
+      "moduleResolution": "node"
+    }
+  }
 }
