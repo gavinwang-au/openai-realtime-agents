@@ -14,7 +14,7 @@ type MeterLookupInput = {
 };
 
 export const meterTypeTool = tool({
-  name: 'find_meter_type_by_address',
+  name: 'meterTypeTool',
   description:
     'Look up an Australian electricity meter by street address. Returns the NMI, checksum, and meter detail when found.',
   parameters: {

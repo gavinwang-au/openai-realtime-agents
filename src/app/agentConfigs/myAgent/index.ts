@@ -190,7 +190,7 @@ Medium pacing with slight pauses after questions to allow users to process and r
     "id": "verify_meter_type_by_address",
     "description": "Verify user meter type by their address",
     "instructions": [
-      "Let the user know you're checking their meter type by calling the find_meter_type_by_address tool.",
+      "Let the user know you're checking their meter type by calling the meterTypeTool tool.",
       "Call the tool with the confirmed street number, street name, street type, suburb, postcode, state, and singleResult=true unless the caller requests multiple results.",
       "If the tool returns a success, share the NMI, checksum, and meter details with the caller and explain the next steps.",
       "If there's an error, provide a friendly explanation and suggest next steps such as confirming the address or escalating."
