@@ -8,12 +8,16 @@
 !.yarn/releases
 !.yarn/versions
 
+# workspace artifacts
+pnpm-debug.log*
+
 # testing
 /coverage
 
 # next.js
 /.next/
 /out/
+apps/*/.next/
 
 # production
 /build
@@ -28,15 +32,24 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# Ignore all env files except .env.sample
+# env files
 .env
-
+.env.*
+apps/*/.env.local
 
 # vercel
 .vercel
 
 # typescript
 *.tsbuildinfo
-next-env.d.ts
-todo.md
 
+# pulumi
+infra/Pulumi.*.json
+infra/node_modules
+infra/.pulumi
+
+# generated
+next-env.d.ts
+
+# project notes
+todo.md

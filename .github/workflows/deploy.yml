@@ -1,0 +1,153 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+
+permissions:
+  contents: read
+  id-token: write
+  pull-requests: write
+
+env:
+  NODE_VERSION: 20.17.0
+  AWS_REGION: ap-southeast-2
+  PROJECT_NAME: openai-realtime-agents
+
+jobs:
+  preview:
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy preview environment
+        id: deploy
+        env:
+          SST_STAGE: ${{ format('pr-{0}', github.event.number) }}
+        run: |
+          pnpm infra:deploy -- --stage "$SST_STAGE" --no-color
+          SITE_URL=$(pnpm infra:outputs -- --stage "$SST_STAGE" --no-color | awk -F': ' '/WebUrl/ {print $2}' | tr -d '[:space:]')
+          echo "stage=$SST_STAGE" >> "$GITHUB_OUTPUT"
+          echo "site_url=$SITE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Comment preview URL
+        if: steps.deploy.outputs.site_url != ''
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ steps.deploy.outputs.site_url }}
+        with:
+          script: |
+            const siteUrl = process.env.SITE_URL;
+            const body = `🚀 Preview deployed: [${siteUrl}](${siteUrl})`;
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  preview-teardown:
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Remove preview environment
+        env:
+          SST_STAGE: ${{ format('pr-{0}', github.event.number) }}
+        run: |
+          pnpm infra:remove -- --stage "$SST_STAGE" --no-color || echo "Stage already removed"
+
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        stage: [stg, prod]
+      max-parallel: 1
+    environment:
+      name: ${{ matrix.stage }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy stage
+        id: deploy_stage
+        env:
+          SST_STAGE: ${{ matrix.stage }}
+        run: |
+          pnpm infra:deploy:${{ matrix.stage }}
+          SITE_URL=$(pnpm infra:outputs -- --stage "$SST_STAGE" --no-color | awk -F': ' '/WebUrl/ {print $2}' | tr -d '[:space:]')
+          echo "stage=$SST_STAGE" >> "$GITHUB_OUTPUT"
+          echo "site_url=$SITE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish environment URL
+        if: steps.deploy_stage.outputs.site_url != ''
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ steps.deploy_stage.outputs.site_url }}
+          STAGE: ${{ matrix.stage }}
+        with:
+          script: |
+            core.notice(`Stage ${process.env.STAGE} deployed to ${process.env.SITE_URL}`);
