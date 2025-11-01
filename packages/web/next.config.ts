@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+ output: 'standalone', // generates .next/required-server-files.json
 };
 
 export default nextConfig;

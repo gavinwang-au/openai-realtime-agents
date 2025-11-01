@@ -10,9 +10,7 @@ export default $config({
   },
   async run() {
     await import("./infra/secret");
-    await import("./infra/web");
-    return {
-    
-    };
+    const { webOutputs } = await import("./infra/web");
+    return webOutputs;
   },
 });

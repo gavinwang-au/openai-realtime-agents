@@ -9,9 +9,8 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "WebSite": {
-      "type": "sst.aws.Nextjs"
-      "url": string
+    "realtime-agent-dev-vpc": {
+      "type": "sst.aws.Vpc"
     }
   }
 }
