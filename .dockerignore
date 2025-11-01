@@ -1,0 +1,9 @@
+.git
+.gitignore
+.sst
+node_modules
+pnpm-store
+pnpm-store/
+packages/*/node_modules
+packages/*/.next
+infra/**/*.js
