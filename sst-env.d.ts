@@ -9,6 +9,11 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
+    "realtime-agent-dev-ecs": {
+      "service": string
+      "type": "sst.aws.Service"
+      "url": string
+    }
     "realtime-agent-dev-vpc": {
       "type": "sst.aws.Vpc"
     }
