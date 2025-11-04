@@ -28,13 +28,15 @@ import { customerServiceRetailCompanyName } from "@/app/agentConfigs/customerSer
 import { chatSupervisorCompanyName } from "@/app/agentConfigs/chatSupervisor";
 import { simpleHandoffScenario } from "@/app/agentConfigs/simpleHandoff";
 import { chatAgentManagerScenario} from '@/app/agentConfigs/myAgent'
+import { kiwiAgentScenario } from '@/app/agentConfigs/kiwiAgent'
 
 // Map used by connect logic for scenarios defined via the SDK.
 const sdkScenarioMap: Record<string, RealtimeAgent[]> = {
   simpleHandoff: simpleHandoffScenario,
   customerServiceRetail: customerServiceRetailScenario,
   chatSupervisor: chatSupervisorScenario,
-  chatAgentManager: chatAgentManagerScenario
+  chatAgentManager: chatAgentManagerScenario,
+  kiwiAgent: kiwiAgentScenario
 };
 
 import useAudioDownload from "./hooks/useAudioDownload";
