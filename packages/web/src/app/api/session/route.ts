@@ -1,6 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyAuthorizationHeader } from "../lib/openauth";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authorization = request.headers.get("authorization");
+  const verified = await verifyAuthorizationHeader(authorization);
+
+  if ("err" in verified) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const response = await fetch(
       "https://api.openai.com/v1/realtime/sessions",
@@ -13,7 +21,7 @@ export async function GET() {
         body: JSON.stringify({
           model: "gpt-4o-realtime-preview-2025-06-03",
         }),
-      }
+      },
     );
     const data = await response.json();
     return NextResponse.json(data);
@@ -21,7 +29,7 @@ export async function GET() {
     console.error("Error in /session:", error);
     return NextResponse.json(
       { error: "Internal Server Error" },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }

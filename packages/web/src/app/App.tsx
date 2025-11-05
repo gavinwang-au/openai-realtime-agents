@@ -17,6 +17,7 @@ import type { RealtimeAgent } from '@openai/agents/realtime';
 // Context providers & hooks
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
+import { useAuth } from "@/app/contexts/AuthContext";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
 import { createModerationGuardrail } from "@/app/agentConfigs/guardrails";
 
@@ -65,6 +66,7 @@ function App() {
     addTranscriptBreadcrumb,
   } = useTranscript();
   const { logClientEvent, logServerEvent } = useEvent();
+  const auth = useAuth();
 
   const [selectedAgentName, setSelectedAgentName] = useState<string>("");
   const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<
@@ -138,6 +140,11 @@ function App() {
   useHandleSessionHistory();
 
   useEffect(() => {
+    // Skip agent selection redirects while OAuth params are present so the auth callback can finish.
+    if (searchParams.has("code") || searchParams.has("state") || searchParams.has("error")) {
+      return;
+    }
+
     let finalAgentConfig = searchParams.get("agentConfig");
     if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
       finalAgentConfig = defaultAgentSetKey;
@@ -155,10 +162,10 @@ function App() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (selectedAgentName && sessionStatus === "DISCONNECTED") {
-      connectToRealtime();
-    }
-  }, [selectedAgentName]);
+    if (!auth.loggedIn) return;
+    if (!selectedAgentName) return;
+    connectToRealtime();
+  }, [selectedAgentName, auth.loggedIn]);
 
   useEffect(() => {
     if (
@@ -184,7 +191,35 @@ function App() {
 
   const fetchEphemeralKey = async (): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
-    const tokenResponse = await fetch("/api/session");
+
+    const accessToken = await auth.getToken();
+    if (!accessToken) {
+      logClientEvent(
+        { reason: "missing_access_token" },
+        "error.session_token_request_failed",
+      );
+      setSessionStatus("DISCONNECTED");
+      return null;
+    }
+
+    const tokenResponse = await fetch("/api/session", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!tokenResponse.ok) {
+      logClientEvent(
+        { status: tokenResponse.status },
+        "error.session_token_request_failed",
+      );
+      if (tokenResponse.status === 401) {
+        auth.logout();
+      }
+      setSessionStatus("DISCONNECTED");
+      return null;
+    }
+
     const data = await tokenResponse.json();
     logServerEvent(data, "fetch_session_token_response");
 
@@ -199,6 +234,7 @@ function App() {
   };
 
   const connectToRealtime = async () => {
+    if (!auth.loggedIn) return;
     const agentSetKey = searchParams.get("agentConfig") || "default";
     if (sdkScenarioMap[agentSetKey]) {
       if (sessionStatus !== "DISCONNECTED") return;
@@ -206,7 +242,10 @@ function App() {
 
       try {
         const EPHEMERAL_KEY = await fetchEphemeralKey();
-        if (!EPHEMERAL_KEY) return;
+        if (!EPHEMERAL_KEY) {
+          setSessionStatus("DISCONNECTED");
+          return;
+        }
 
         // Ensure the selectedAgentName is first so that it becomes the root
         const reorderedAgents = [...sdkScenarioMap[agentSetKey]];
@@ -436,6 +475,28 @@ function App() {
 
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
+  if (!auth.loaded) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-gray-100 text-gray-800">
+        <span className="text-lg font-medium">Loading authentication…</span>
+      </div>
+    );
+  }
+
+  if (!auth.loggedIn) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-gray-100 text-gray-800">
+        <p className="text-xl font-semibold">Sign in to use the demo</p>
+        <button
+          onClick={() => void auth.login()}
+          className="rounded-lg bg-black px-4 py-2 text-white shadow hover:bg-gray-900"
+        >
+          Continue with email code
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="text-base flex flex-col h-screen bg-gray-100 text-gray-800 relative">
       <div className="p-5 text-lg font-semibold flex justify-between items-center">
@@ -516,6 +577,17 @@ function App() {
               </div>
             </div>
           )}
+          <div className="ml-6 flex items-center gap-3">
+            <span className="text-sm text-gray-600">
+              Signed in{auth.userId ? ` as ${auth.userId}` : ""}
+            </span>
+            <button
+              onClick={() => auth.logout()}
+              className="rounded border border-gray-300 px-3 py-1 text-sm font-medium hover:bg-gray-200"
+            >
+              Log out
+            </button>
+          </div>
         </div>
       </div>
 

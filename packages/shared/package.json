@@ -5,5 +5,9 @@
   "type": "module",
   "exports": {
     "./*": "./src/*.ts"
+  },
+  "dependencies": {
+    "@openauthjs/openauth": "^0.4.3",
+    "valibot": "^1.0.0-beta.14"
   }
 }

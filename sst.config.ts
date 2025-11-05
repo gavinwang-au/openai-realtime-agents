@@ -1,4 +1,4 @@
-/// <reference path="./.sst/platform/config.d.ts" />
+
 
 export default $config({
   app(input) {
@@ -10,7 +10,11 @@ export default $config({
   },
   async run() {
     await import("./infra/secret");
+    const { authOutputs } = await import("./infra/auth");
     const { webOutputs } = await import("./infra/web");
-    return webOutputs;
+    return {
+      ...authOutputs,
+      ...webOutputs,
+    };
   },
 });

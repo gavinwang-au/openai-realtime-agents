@@ -1,6 +1,7 @@
 import { cluster } from "./ecs";
 import { secrets } from "./secret";
 import { getStage, getProjectName } from "./environments";
+import { auth } from "./auth";
 
 const stage = getStage();
 const projectName = getProjectName();
@@ -40,6 +41,10 @@ const webService = new sst.aws.Service(`${projectName}-ecs`, {
     NODE_ENV: "production",
     LOG_LEVEL: "info",
     NEXT_PUBLIC_STAGE: stage,
+    NEXT_PUBLIC_AUTH_URL: auth.url,
+    NEXT_PUBLIC_AUTH_CLIENT_ID: "web",
+    AUTH_ISSUER_URL: auth.url,
+    AUTH_API_CLIENT_ID: "jwt-api",
     OPENAI_API_KEY: secrets.OPENAI_API_KEY.value,
   },
   dev: {
