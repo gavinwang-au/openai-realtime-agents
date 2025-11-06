@@ -11,5 +11,6 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     userId: verified.subject.properties.id,
+    email: verified.subject.properties.email,
   });
 }

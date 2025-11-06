@@ -514,11 +514,11 @@ function App() {
             />
           </div>
           <div>
-            Realtime API <span className="text-gray-500">Agents</span>
+            Voice <span className="text-gray-500">Agents</span>
           </div>
         </div>
         <div className="flex items-center">
-          <label className="flex items-center text-base gap-1 mr-2 font-medium">
+          {/* <label className="flex items-center text-base gap-1 mr-2 font-medium">
             Scenario
           </label>
           <div className="relative inline-block">
@@ -542,9 +542,9 @@ function App() {
                 />
               </svg>
             </div>
-          </div>
+          </div> */}
 
-          {agentSetKey && (
+          {/* {agentSetKey && (
             <div className="flex items-center ml-6">
               <label className="flex items-center text-base gap-1 mr-2 font-medium">
                 Agent
@@ -576,10 +576,10 @@ function App() {
                 </div>
               </div>
             </div>
-          )}
+          )} */}
           <div className="ml-6 flex items-center gap-3">
             <span className="text-sm text-gray-600">
-              Signed in{auth.userId ? ` as ${auth.userId}` : ""}
+              Signed in{auth.email ? ` as ${auth.email}` : ""}
             </span>
             <button
               onClick={() => auth.logout()}

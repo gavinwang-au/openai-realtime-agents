@@ -3,6 +3,7 @@ import { issuer } from "@openauthjs/openauth";
 // import { CodeUI } from "@openauthjs/openauth/ui/code";
 // import { CodeProvider } from "@openauthjs/openauth/provider/code";
 import { handle } from "hono/aws-lambda";
+import { cors } from "hono/cors";
 import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { MemoryStorage } from "@openauthjs/openauth/storage/memory";
@@ -62,5 +63,15 @@ const app = issuer({
     throw new Error("Invalid provider");
   },
 });
+
+app.use(
+  "*",
+  cors({
+    origin: "*",
+    allowHeaders: ["*"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    credentials: false,
+  }),
+);
 
 export const handler = handle(app);

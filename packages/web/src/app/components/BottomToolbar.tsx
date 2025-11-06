@@ -116,7 +116,7 @@ function BottomToolbar({
         </label>
       </div>
 
-      <div className="flex flex-row items-center gap-2">
+      {/* <div className="flex flex-row items-center gap-2">
         <input
           id="logs"
           type="checkbox"
@@ -127,7 +127,7 @@ function BottomToolbar({
         <label htmlFor="logs" className="flex items-center cursor-pointer">
           Logs
         </label>
-      </div>
+      </div> */}
 
       <div className="flex flex-row items-center gap-2">
         <div>Codec:</div>

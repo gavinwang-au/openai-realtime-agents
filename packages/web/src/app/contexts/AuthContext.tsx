@@ -24,6 +24,7 @@ const client = createClient({
 
 type AuthContextValue = {
   userId?: string;
+  email?: string;
   loaded: boolean;
   loggedIn: boolean;
   login: () => Promise<void>;
@@ -39,6 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loggedIn, setLoggedIn] = useState(false);
   const tokenRef = useRef<string | undefined>(undefined);
   const [userId, setUserId] = useState<string | undefined>(undefined);
+  const [email, setEmail] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -155,8 +157,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error(`Unable to fetch user info (${res.status})`);
       }
 
-      const user = (await res.json()) as { userId?: string };
+      const user = (await res.json()) as { userId?: string; email?: string };
       setUserId(user.userId);
+      setEmail(user.email);
       setLoggedIn(true);
     } catch (err) {
       console.error("Failed to fetch user information", err);
@@ -168,6 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenRef.current = undefined;
     setLoggedIn(false);
     setUserId(undefined);
+    setEmail(undefined);
     window.location.replace("/");
   }
 
@@ -175,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         userId,
+        email,
         loaded,
         loggedIn,
         login,
