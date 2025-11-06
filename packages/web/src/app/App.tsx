@@ -368,6 +368,7 @@ function App() {
     }
   };
 
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newAgentConfig = e.target.value;
     const url = new URL(window.location.toString());
@@ -375,6 +376,7 @@ function App() {
     window.location.replace(url.toString());
   };
 
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   const handleSelectedAgentChange = (
     e: React.ChangeEvent<HTMLSelectElement>
   ) => {
@@ -473,6 +475,7 @@ function App() {
     };
   }, [sessionStatus]);
 
+  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
   const agentSetKey = searchParams.get("agentConfig") || "default";
 
   if (!auth.loaded) {

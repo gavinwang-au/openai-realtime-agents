@@ -36,6 +36,10 @@ const webService = new sst.aws.Service(`${projectName}-ecs`, {
   image: {
     context: ".",
     dockerfile: "packages/web/Dockerfile",
+    args: {
+      AUTH_ISSUER_URL: auth.url,
+      NEXT_PUBLIC_AUTH_URL: auth.url,
+    },
   },
   environment: {
     NODE_ENV: "production",

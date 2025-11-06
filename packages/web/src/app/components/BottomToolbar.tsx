@@ -25,7 +25,9 @@ function BottomToolbar({
   isPTTUserSpeaking,
   handleTalkButtonDown,
   handleTalkButtonUp,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   isEventsPaneExpanded,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   setIsEventsPaneExpanded,
   isAudioPlaybackEnabled,
   setIsAudioPlaybackEnabled,
