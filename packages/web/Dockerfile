@@ -43,23 +43,18 @@ RUN pnpm --filter @openai-realtime-agents/web build
 
 
 FROM node:20.17-bullseye-slim AS runner
-ARG PNPM_VERSION
 ARG AUTH_ISSUER_URL
 ARG NEXT_PUBLIC_AUTH_URL
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable
-RUN corepack prepare pnpm@${PNPM_VERSION} --activate
-
-COPY --from=builder /app/package.json ./
-COPY --from=builder /app/pnpm-lock.yaml ./
-COPY --from=builder /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/packages ./packages
-
 ENV AUTH_ISSUER_URL=${AUTH_ISSUER_URL}
 ENV NEXT_PUBLIC_AUTH_URL=${NEXT_PUBLIC_AUTH_URL}
 
+# Copy the standalone output produced by Next.js along with static assets.
+COPY --from=builder --chown=node:node /app/packages/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/packages/web/.next/static ./packages/web/.next/static
+COPY --from=builder --chown=node:node /app/packages/web/public ./packages/web/public
+
 EXPOSE 3000
-CMD ["pnpm", "--filter", "@openai-realtime-agents/web", "start"]
+USER node
+CMD ["node", "packages/web/server.js"]
