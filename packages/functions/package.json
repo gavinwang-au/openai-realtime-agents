@@ -8,8 +8,7 @@
         "@openauthjs/openauth": "^0.4.3",
         "arctic": "^2.3.4",
         "hono": "^4.7.4",
-        "sst": "*",
-        "valibot": "^1.0.0-beta.14"
+        "sst": "*"
     },
     "devDependencies": {
         "@types/aws-lambda": "^8"

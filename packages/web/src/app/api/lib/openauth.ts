@@ -21,7 +21,14 @@ export async function verifyAuthorizationHeader(
   }
 
   const token = authorization.slice("Bearer ".length).trim();
-  const verified = await authClient.verify(subjects, token);
+  let verified: Awaited<ReturnType<typeof authClient.verify>>;
+
+  try {
+    verified = await authClient.verify(subjects, token);
+  } catch (err) {
+    console.error("Failed to verify access token", err);
+    return { err: new Error("Unauthorized") } as const;
+  }
 
   if (verified.err) {
     return { err: new Error("Unauthorized") } as const;

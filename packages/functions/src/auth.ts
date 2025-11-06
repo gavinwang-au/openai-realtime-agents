@@ -3,10 +3,10 @@ import { issuer } from "@openauthjs/openauth";
 // import { CodeUI } from "@openauthjs/openauth/ui/code";
 // import { CodeProvider } from "@openauthjs/openauth/provider/code";
 import { handle } from "hono/aws-lambda";
-import { subjects } from "@openai-realtime-agents/shared/auth";
 import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { MemoryStorage } from "@openauthjs/openauth/storage/memory";
+import { subjects } from "@openai-realtime-agents/shared/auth";
 
 const normalizeEmail = (email: string) => email.trim().toLowerCase();
 
@@ -39,16 +39,6 @@ const app = issuer({
   // Remove after setting custom domain
   allow: async () => true,
   providers: {
-    // code: CodeProvider(
-    //   CodeUI({
-    //      copy: {
-    //       code_info: "We'll send a pin code to your email"
-    //     },
-    //     sendCode: async (email, code) => {
-    //       console.log(email, code);
-    //     },
-    //   }),
-    // ),
     password: PasswordProvider(
       PasswordUI({
         sendCode: async (email, code) => {
@@ -63,9 +53,10 @@ const app = issuer({
   },
   success: async (ctx, value) => {
     if (value.provider === "password") {
-      const { id } = createUserIdentity(value.email);
+      const { id, normalized } = createUserIdentity(value.email);
       return ctx.subject("user", {
         id,
+        email: normalized,
       });
     }
     throw new Error("Invalid provider");

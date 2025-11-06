@@ -8,6 +8,10 @@ const typeScriptConfigs = tseslint.configs.recommendedTypeChecked.map((config) =
   ignores: ["packages/web/**"],
   languageOptions: {
     ...config.languageOptions,
+    globals: {
+      ...(config.languageOptions?.globals ?? {}),
+      sst: "readonly",
+    },
     parserOptions: {
       ...config.languageOptions?.parserOptions,
       project: [
@@ -46,5 +50,14 @@ export default [
     },
   },
   ...typeScriptConfigs,
+  {
+    files: ["infra/**/*.ts", "sst.config.ts"],
+    rules: {
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
+    },
+  },
   prettier,
 ];
