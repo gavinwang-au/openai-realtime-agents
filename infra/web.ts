@@ -5,6 +5,8 @@ import { auth } from "./auth";
 
 const stage = getStage();
 const projectName = getProjectName();
+const devDomainName =
+  process.env.WEB_DOMAIN_NAME ?? "www.dev.example.com";
 
 const healthChecks = {
   "3000/http": {
@@ -16,7 +18,8 @@ const loadBalancer =
   stage === "dev"
     ? {
         domain: {
-          name: "www.dev.heneinfo.com",
+          name: devDomainName,
+          //cert: process.env.WEB_CERT_ARN,
         },
         rules: [
           { listen: "80/http" as const, redirect: "443/https" as const },
