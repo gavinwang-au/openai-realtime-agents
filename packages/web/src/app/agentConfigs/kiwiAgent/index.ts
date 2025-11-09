@@ -2,7 +2,6 @@ import { RealtimeAgent } from '@openai/agents/realtime'
 
 export const kiwiChatAgent = new RealtimeAgent({
   name: 'kiwiChatAgent',
-  voice: 'sage',
   instructions: `
 # Personality and Tone
 ## Identity

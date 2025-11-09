@@ -9,16 +9,16 @@ declare module "sst" {
       "type": "sst.sst.Secret"
       "value": string
     }
-    "realtime-agent-dev-auth": {
+    "realtime-agent-yuwang-auth": {
       "type": "sst.aws.Auth"
       "url": string
     }
-    "realtime-agent-dev-ecs": {
+    "realtime-agent-yuwang-ecs": {
       "service": string
       "type": "sst.aws.Service"
       "url": string
     }
-    "realtime-agent-dev-vpc": {
+    "realtime-agent-yuwang-vpc": {
       "type": "sst.aws.Vpc"
     }
   }

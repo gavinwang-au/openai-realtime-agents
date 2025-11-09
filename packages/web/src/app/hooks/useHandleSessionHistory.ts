@@ -1,10 +1,14 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
 
-export function useHandleSessionHistory() {
+type HandleSessionHistoryOptions = {
+  onAssistantMessage?: (itemId: string, text: string) => void;
+};
+
+export function useHandleSessionHistory(options: HandleSessionHistoryOptions = {}) {
   const {
     transcriptItems,
     addTranscriptBreadcrumb,
@@ -14,6 +18,12 @@ export function useHandleSessionHistory() {
   } = useTranscript();
 
   const { logServerEvent } = useEvent();
+  const optionsRef = useRef(options);
+  const assistantNotifiedRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   /* ----------------------- helpers ------------------------- */
 
@@ -24,6 +34,7 @@ export function useHandleSessionHistory() {
       .map((c) => {
         if (!c || typeof c !== "object") return "";
         if (c.type === "input_text") return c.text ?? "";
+        if (c.type === "text" || c.type === "output_text") return c.text ?? "";
         if (c.type === "audio") return c.transcript ?? "";
         return "";
       })
@@ -65,6 +76,13 @@ export function useHandleSessionHistory() {
     return text.match(/Failure Details: (\{.*?\})/)?.[1];
   };
 
+  const notifyAssistantOutput = (itemId: string, text: string) => {
+    if (!text || !text.trim()) return;
+    if (assistantNotifiedRef.current.has(itemId)) return;
+    assistantNotifiedRef.current.add(itemId);
+    optionsRef.current.onAssistantMessage?.(itemId, text);
+  };
+
   /* ----------------------- event handlers ------------------------- */
 
   function handleAgentToolStart(details: any, _agent: any, functionCall: any) {
@@ -75,7 +93,7 @@ export function useHandleSessionHistory() {
     addTranscriptBreadcrumb(
       `function call: ${function_name}`,
       function_args
-    );    
+    );
   }
   function handleAgentToolEnd(details: any, _agent: any, _functionCall: any, result: any) {
     const lastFunctionCall = extractFunctionCallByName(_functionCall.name, details?.context?.history);
@@ -89,7 +107,8 @@ export function useHandleSessionHistory() {
     console.log("[handleHistoryAdded] ", item);
     if (!item || item.type !== 'message') return;
 
-    const { itemId, role, content = [] } = item;
+    const { itemId, role, content = [], status } = item;
+    console.log('[History] handleHistoryAdded -- status', { status });
     if (itemId && role) {
       const isUser = role === "user";
       let text = extractMessageText(content);
@@ -106,6 +125,15 @@ export function useHandleSessionHistory() {
         addTranscriptBreadcrumb('Output Guardrail Active', { details: failureDetails });
       } else {
         addTranscriptMessage(itemId, role, text);
+        if (status === 'completed') {
+          console.log('[History] completed item', { itemId, role, status, text });
+          updateTranscriptItem(itemId, { status: 'DONE' });
+          if (role === 'assistant' && text) {
+            notifyAssistantOutput(itemId, text);
+          }
+        } else {
+          console.log('[History] skipping non-completed item', { itemId, role, status });
+        }
       }
     }
   }
@@ -115,12 +143,19 @@ export function useHandleSessionHistory() {
     items.forEach((item: any) => {
       if (!item || item.type !== 'message') return;
 
-      const { itemId, content = [] } = item;
+      const { itemId, content = [], status, role } = item;
 
       const text = extractMessageText(content);
 
       if (text) {
         updateTranscriptMessage(itemId, text, false);
+      }
+
+      if (status === 'completed') {
+        updateTranscriptItem(itemId, { status: 'DONE' });
+        if (role === 'assistant' && text) {
+          notifyAssistantOutput(itemId, text);
+        }
       }
     });
   }
@@ -138,7 +173,7 @@ export function useHandleSessionHistory() {
     // so we need to handle finishing up when the transcription is completed.
     const itemId = item.item_id;
     const finalTranscript =
-        !item.transcript || item.transcript === "\n"
+      !item.transcript || item.transcript === "\n"
         ? "[inaudible]"
         : item.transcript;
     if (itemId) {
@@ -156,6 +191,10 @@ export function useHandleSessionHistory() {
             rationale: '',
           },
         });
+      }
+
+      if (transcriptItem?.role === 'assistant') {
+        notifyAssistantOutput(itemId, finalTranscript);
       }
     }
   }

@@ -94,8 +94,11 @@ To enable the workflow, configure these repository secrets:
 | Variable | Scope | Notes |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | Server runtime | Managed via `sst secret set`. Required for `/api/session` and `/api/responses`. |
+| `AWS_REGION` | Server runtime | Region used for Amazon Polly (`ap-southeast-2` default if unset). Requires IAM credentials with `polly:SynthesizeSpeech`. |
 | `NEXT_PUBLIC_STAGE` | Client runtime | Defaults to the active SST stage. |
 | `LOG_LEVEL` | Server runtime | Controls lambda log verbosity (`info` by default). |
+
+> ℹ️ Make sure your local shell (or the deployed SST role) can assume credentials that allow `polly:SynthesizeSpeech`; the new `/api/tts` route reuses the AWS default credential chain.
 
 Set per-stage secrets with SST:
 

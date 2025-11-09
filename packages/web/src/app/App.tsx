@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
 
@@ -12,36 +12,18 @@ import BottomToolbar from "./components/BottomToolbar";
 
 // Types
 import { SessionStatus } from "@/app/types";
-import type { RealtimeAgent } from '@openai/agents/realtime';
 
 // Context providers & hooks
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { useEvent } from "@/app/contexts/EventContext";
 import { useAuth } from "@/app/contexts/AuthContext";
 import { useRealtimeSession } from "./hooks/useRealtimeSession";
-import { createModerationGuardrail } from "@/app/agentConfigs/guardrails";
 
 // Agent configs
-import { allAgentSets, defaultAgentSetKey } from "@/app/agentConfigs";
-import { customerServiceRetailScenario } from "@/app/agentConfigs/customerServiceRetail";
-import { chatSupervisorScenario } from "@/app/agentConfigs/chatSupervisor";
-import { customerServiceRetailCompanyName } from "@/app/agentConfigs/customerServiceRetail";
-import { chatSupervisorCompanyName } from "@/app/agentConfigs/chatSupervisor";
-import { simpleHandoffScenario } from "@/app/agentConfigs/simpleHandoff";
-import { chatAgentManagerScenario} from '@/app/agentConfigs/myAgent'
 import { kiwiAgentScenario } from '@/app/agentConfigs/kiwiAgent'
 
-// Map used by connect logic for scenarios defined via the SDK.
-const sdkScenarioMap: Record<string, RealtimeAgent[]> = {
-  simpleHandoff: simpleHandoffScenario,
-  customerServiceRetail: customerServiceRetailScenario,
-  chatSupervisor: chatSupervisorScenario,
-  chatAgentManager: chatAgentManagerScenario,
-  kiwiAgent: kiwiAgentScenario
-};
-
 import useAudioDownload from "./hooks/useAudioDownload";
-import { useHandleSessionHistory } from "./hooks/useHandleSessionHistory";
+import { usePollyPlayback } from "./hooks/usePollyPlayback";
 
 function App() {
   const searchParams = useSearchParams()!;
@@ -68,45 +50,45 @@ function App() {
   const { logClientEvent, logServerEvent } = useEvent();
   const auth = useAuth();
 
-  const [selectedAgentName, setSelectedAgentName] = useState<string>("");
-  const [selectedAgentConfigSet, setSelectedAgentConfigSet] = useState<
-    RealtimeAgent[] | null
-  >(null);
+  const [selectedAgentName, setSelectedAgentName] = useState<string>(
+    kiwiAgentScenario[0]?.name ?? "",
+  );
 
+  const MIN_PTT_AUDIO_MS = 250;
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const pollyAudioRef = useRef<HTMLAudioElement | null>(null);
+  const spokenItemIdsRef = useRef<Set<string>>(new Set());
+  const pttHoldStartRef = useRef<number | null>(null);
   // Ref to identify whether the latest agent switch came from an automatic handoff
   const handoffTriggeredRef = useRef(false);
 
-  const sdkAudioElement = React.useMemo(() => {
+  const pollyAudioElement = React.useMemo(() => {
     if (typeof window === 'undefined') return undefined;
     const el = document.createElement('audio');
     el.autoplay = true;
+    el.preload = 'auto';
     el.style.display = 'none';
     document.body.appendChild(el);
     return el;
   }, []);
 
-  // Attach SDK audio element once it exists (after first render in browser)
   useEffect(() => {
-    if (sdkAudioElement && !audioElementRef.current) {
-      audioElementRef.current = sdkAudioElement;
+    if (pollyAudioElement) {
+      pollyAudioRef.current = pollyAudioElement;
     }
-  }, [sdkAudioElement]);
+  }, [pollyAudioElement]);
 
-  const {
-    connect,
-    disconnect,
-    sendUserText,
-    sendEvent,
-    interrupt,
-    mute,
-  } = useRealtimeSession({
-    onConnectionChange: (s) => setSessionStatus(s as SessionStatus),
-    onAgentHandoff: (agentName: string) => {
-      handoffTriggeredRef.current = true;
-      setSelectedAgentName(agentName);
-    },
-  });
+  useEffect(() => {
+    if (pollyAudioElement) {
+      audioElementRef.current = pollyAudioElement;
+    }
+  }, [pollyAudioElement]);
+
+  useEffect(() => {
+    return () => {
+      pollyAudioElement?.remove();
+    };
+  }, [pollyAudioElement]);
 
   const [sessionStatus, setSessionStatus] =
     useState<SessionStatus>("DISCONNECTED");
@@ -128,6 +110,73 @@ function App() {
   const { startRecording, stopRecording, downloadRecording } =
     useAudioDownload();
 
+  const {
+    enqueueSpeech: enqueuePollySpeech,
+    stopPlayback: stopPollyPlayback,
+    resetQueue: resetPollyQueue,
+  } = usePollyPlayback({
+    audioElementRef: pollyAudioRef,
+    getAccessToken: async () => (await auth.getToken()) ?? null,
+  });
+
+  const handleAssistantMessage = useCallback(
+    (itemId: string, text: string) => {
+      console.log('[Polly TTS] assistant message received', {
+        itemId,
+        text,
+        audioEnabled: isAudioPlaybackEnabled,
+      });
+
+      if (!isAudioPlaybackEnabled) {
+        console.log('[Polly TTS] audio disabled, skipping');
+        return;
+      }
+
+      if (spokenItemIdsRef.current.has(itemId)) {
+        console.log('[Polly TTS] skipping already-spoken item', itemId);
+        return;
+      }
+
+      console.log('[Polly TTS] enqueue', { itemId, text });
+      spokenItemIdsRef.current.add(itemId);
+      enqueuePollySpeech(text);
+    },
+    [isAudioPlaybackEnabled, enqueuePollySpeech],
+  );
+
+  const {
+    connect,
+    disconnect,
+    sendUserText,
+    sendEvent,
+    interrupt: sessionInterrupt,
+    mute,
+  } = useRealtimeSession({
+    onConnectionChange: (s) => setSessionStatus(s as SessionStatus),
+    onAgentHandoff: (agentName: string) => {
+      handoffTriggeredRef.current = true;
+      setSelectedAgentName(agentName);
+    },
+    onAssistantMessage: handleAssistantMessage,
+  });
+
+  const stopExternalAudio = useCallback(() => {
+    stopPollyPlayback();
+  }, [stopPollyPlayback]);
+
+  const interrupt = useCallback(() => {
+    stopExternalAudio();
+    sessionInterrupt();
+  }, [sessionInterrupt, stopExternalAudio]);
+
+  useEffect(() => {
+    if (sessionStatus === "DISCONNECTED") {
+      spokenItemIdsRef.current.clear();
+      resetPollyQueue();
+      stopExternalAudio();
+    }
+  }, [sessionStatus, resetPollyQueue, stopExternalAudio]);
+
   const sendClientEvent = (eventObj: any, eventNameSuffix = "") => {
     try {
       sendEvent(eventObj);
@@ -137,30 +186,6 @@ function App() {
     }
   };
 
-  useHandleSessionHistory();
-
-  useEffect(() => {
-    // Skip agent selection redirects while OAuth params are present so the auth callback can finish.
-    if (searchParams.has("code") || searchParams.has("state") || searchParams.has("error")) {
-      return;
-    }
-
-    let finalAgentConfig = searchParams.get("agentConfig");
-    if (!finalAgentConfig || !allAgentSets[finalAgentConfig]) {
-      finalAgentConfig = defaultAgentSetKey;
-      const url = new URL(window.location.toString());
-      url.searchParams.set("agentConfig", finalAgentConfig);
-      window.location.replace(url.toString());
-      return;
-    }
-
-    const agents = allAgentSets[finalAgentConfig];
-    const agentKeyToUse = agents[0]?.name || "";
-
-    setSelectedAgentName(agentKeyToUse);
-    setSelectedAgentConfigSet(agents);
-  }, [searchParams]);
-
   useEffect(() => {
     if (!auth.loggedIn) return;
     if (!selectedAgentName) return;
@@ -168,12 +193,8 @@ function App() {
   }, [selectedAgentName, auth.loggedIn]);
 
   useEffect(() => {
-    if (
-      sessionStatus === "CONNECTED" &&
-      selectedAgentConfigSet &&
-      selectedAgentName
-    ) {
-      const currentAgent = selectedAgentConfigSet.find(
+    if (sessionStatus === "CONNECTED" && selectedAgentName) {
+      const currentAgent = kiwiAgentScenario.find(
         (a) => a.name === selectedAgentName
       );
       addTranscriptBreadcrumb(`Agent: ${selectedAgentName}`, currentAgent);
@@ -181,7 +202,7 @@ function App() {
       // Reset flag after handling so subsequent effects behave normally
       handoffTriggeredRef.current = false;
     }
-  }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
+  }, [selectedAgentName, sessionStatus]);
 
   useEffect(() => {
     if (sessionStatus === "CONNECTED") {
@@ -235,49 +256,39 @@ function App() {
 
   const connectToRealtime = async () => {
     if (!auth.loggedIn) return;
-    const agentSetKey = searchParams.get("agentConfig") || "default";
-    if (sdkScenarioMap[agentSetKey]) {
-      if (sessionStatus !== "DISCONNECTED") return;
-      setSessionStatus("CONNECTING");
+    if (sessionStatus !== "DISCONNECTED") return;
+    setSessionStatus("CONNECTING");
 
-      try {
-        const EPHEMERAL_KEY = await fetchEphemeralKey();
-        if (!EPHEMERAL_KEY) {
-          setSessionStatus("DISCONNECTED");
-          return;
-        }
-
-        // Ensure the selectedAgentName is first so that it becomes the root
-        const reorderedAgents = [...sdkScenarioMap[agentSetKey]];
-        const idx = reorderedAgents.findIndex((a) => a.name === selectedAgentName);
-        if (idx > 0) {
-          const [agent] = reorderedAgents.splice(idx, 1);
-          reorderedAgents.unshift(agent);
-        }
-
-        const companyName = agentSetKey === 'customerServiceRetail'
-          ? customerServiceRetailCompanyName
-          : chatSupervisorCompanyName;
-        const guardrail = createModerationGuardrail(companyName);
-
-        await connect({
-          getEphemeralKey: async () => EPHEMERAL_KEY,
-          initialAgents: reorderedAgents,
-          audioElement: sdkAudioElement,
-          outputGuardrails: [guardrail],
-          extraContext: {
-            addTranscriptBreadcrumb,
-          },
-        });
-      } catch (err) {
-        console.error("Error connecting via SDK:", err);
+    try {
+      const EPHEMERAL_KEY = await fetchEphemeralKey();
+      if (!EPHEMERAL_KEY) {
         setSessionStatus("DISCONNECTED");
+        return;
       }
-      return;
+
+      const reorderedAgents = [...kiwiAgentScenario];
+      const idx = reorderedAgents.findIndex((a) => a.name === selectedAgentName);
+      if (idx > 0) {
+        const [agent] = reorderedAgents.splice(idx, 1);
+        reorderedAgents.unshift(agent);
+      }
+
+      await connect({
+        getEphemeralKey: async () => EPHEMERAL_KEY,
+        initialAgents: reorderedAgents,
+        disableModelAudio: true,
+        extraContext: {
+          addTranscriptBreadcrumb,
+        },
+      });
+    } catch (err) {
+      console.error("Error connecting via SDK:", err);
+      setSessionStatus("DISCONNECTED");
     }
   };
 
   const disconnectFromRealtime = () => {
+    stopExternalAudio();
     disconnect();
     setSessionStatus("DISCONNECTED");
     setIsPTTUserSpeaking(false);
@@ -345,6 +356,7 @@ function App() {
     interrupt();
 
     setIsPTTUserSpeaking(true);
+    pttHoldStartRef.current = performance.now();
     sendClientEvent({ type: 'input_audio_buffer.clear' }, 'clear PTT buffer');
 
     // No placeholder; we'll rely on server transcript once ready.
@@ -355,6 +367,16 @@ function App() {
       return;
 
     setIsPTTUserSpeaking(false);
+    const heldMs = pttHoldStartRef.current
+      ? performance.now() - pttHoldStartRef.current
+      : 0;
+    pttHoldStartRef.current = null;
+
+    if (heldMs < MIN_PTT_AUDIO_MS) {
+      logClientEvent({ heldMs }, 'info.ptt_hold_too_short');
+      return;
+    }
+
     sendClientEvent({ type: 'input_audio_buffer.commit' }, 'commit PTT');
     sendClientEvent({ type: 'response.create' }, 'trigger response PTT');
   };
@@ -366,26 +388,6 @@ function App() {
     } else {
       connectToRealtime();
     }
-  };
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  const handleAgentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newAgentConfig = e.target.value;
-    const url = new URL(window.location.toString());
-    url.searchParams.set("agentConfig", newAgentConfig);
-    window.location.replace(url.toString());
-  };
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  const handleSelectedAgentChange = (
-    e: React.ChangeEvent<HTMLSelectElement>
-  ) => {
-    const newAgentName = e.target.value;
-    // Reconnect session with the newly selected agent as root so that tool
-    // execution works correctly.
-    disconnectFromRealtime();
-    setSelectedAgentName(newAgentName);
-    // connectToRealtime will be triggered by effect watching selectedAgentName
   };
 
   // Because we need a new connection, refresh the page when codec changes
@@ -463,20 +465,61 @@ function App() {
   }, [sessionStatus, isAudioPlaybackEnabled]);
 
   useEffect(() => {
-    if (sessionStatus === "CONNECTED" && audioElementRef.current?.srcObject) {
-      // The remote audio stream from the audio element.
-      const remoteStream = audioElementRef.current.srcObject as MediaStream;
-      startRecording(remoteStream);
+    if (!isAudioPlaybackEnabled) {
+      stopExternalAudio();
+    }
+  }, [isAudioPlaybackEnabled, stopExternalAudio]);
+
+  useEffect(() => {
+    if (sessionStatus !== "CONNECTED") {
+      stopRecording();
+      return;
     }
 
-    // Clean up on unmount or when sessionStatus is updated.
+    const el = audioElementRef.current;
+    if (!el) return;
+
+    if (typeof (el as any).captureStream === "function") {
+      let cancelled = false;
+      let loggedFailure = false;
+
+      const ensureStream = () => {
+        if (cancelled) return;
+
+        try {
+          const capture =
+            (el as any).captureStream?.() ?? (el as any).mozCaptureStream?.();
+          if (capture) {
+            startRecording(capture as MediaStream);
+            return;
+          }
+        } catch (err) {
+          if (!loggedFailure) {
+            console.warn("Unable to capture Polly audio stream", err);
+            loggedFailure = true;
+          }
+        }
+
+        requestAnimationFrame(ensureStream);
+      };
+
+      ensureStream();
+
+      return () => {
+        cancelled = true;
+        stopRecording();
+      };
+    } else if (el.srcObject) {
+      startRecording(el.srcObject as MediaStream);
+      return () => {
+        stopRecording();
+      };
+    }
+
     return () => {
       stopRecording();
     };
   }, [sessionStatus]);
-
-  /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
-  const agentSetKey = searchParams.get("agentConfig") || "default";
 
   if (!auth.loaded) {
     return (
@@ -521,65 +564,7 @@ function App() {
           </div>
         </div>
         <div className="flex items-center">
-          {/* <label className="flex items-center text-base gap-1 mr-2 font-medium">
-            Scenario
-          </label>
-          <div className="relative inline-block">
-            <select
-              value={agentSetKey}
-              onChange={handleAgentChange}
-              className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
-            >
-              {Object.keys(allAgentSets).map((agentKey) => (
-                <option key={agentKey} value={agentKey}>
-                  {agentKey}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-              <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-          </div> */}
 
-          {/* {agentSetKey && (
-            <div className="flex items-center ml-6">
-              <label className="flex items-center text-base gap-1 mr-2 font-medium">
-                Agent
-              </label>
-              <div className="relative inline-block">
-                <select
-                  value={selectedAgentName}
-                  onChange={handleSelectedAgentChange}
-                  className="appearance-none border border-gray-300 rounded-lg text-base px-2 py-1 pr-8 cursor-pointer font-normal focus:outline-none"
-                >
-                  {selectedAgentConfigSet?.map((agent) => (
-                    <option key={agent.name} value={agent.name}>
-                      {agent.name}
-                    </option>
-                  ))}
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2 text-gray-600">
-                  <svg
-                    className="h-4 w-4"
-                    viewBox="0 0 20 20"
-                    fill="currentColor"
-                  >
-                    <path
-                      fillRule="evenodd"
-                      d="M5.23 7.21a.75.75 0 011.06.02L10 10.44l3.71-3.21a.75.75 0 111.04 1.08l-4.25 3.65a.75.75 0 01-1.04 0L5.21 8.27a.75.75 0 01.02-1.06z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </div>
-              </div>
-            </div>
-          )} */}
           <div className="ml-6 flex items-center gap-3">
             <span className="text-sm text-gray-600">
               Signed in{auth.email ? ` as ${auth.email}` : ""}
