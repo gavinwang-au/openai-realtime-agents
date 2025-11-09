@@ -36,6 +36,13 @@ const webService = new sst.aws.Service(`${projectName}-ecs`, {
   cluster,
   cpu: "1 vCPU",
   memory: "2 GB",
+  capacity: "spot",
+  permissions: [
+    {
+      actions: ["polly:SynthesizeSpeech"],
+      resources: ["*"],
+    },
+  ],
   image: {
     context: ".",
     dockerfile: "packages/web/Dockerfile",

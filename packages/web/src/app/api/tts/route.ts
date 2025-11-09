@@ -61,18 +61,30 @@ export async function POST(request: NextRequest) {
   const verified = await verifyAuthorizationHeader(authorization);
 
   if ("err" in verified) {
+    console.warn("[api/tts] unauthorized request", { hasAuth: Boolean(authorization) });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  let debugContext: { trimmedLength?: number; safeLength?: number } = {};
 
   try {
     const { text } = await request.json();
     const trimmedText = (text ?? "").toString().trim();
 
     if (!trimmedText) {
+      console.warn("[api/tts] empty text payload");
       return NextResponse.json({ error: "Missing text" }, { status: 400 });
     }
 
     const safeText = trimmedText.slice(0, 3000);
+    debugContext = {
+      trimmedLength: trimmedText.length,
+      safeLength: safeText.length,
+    };
+    console.log("[api/tts] synthesizing", {
+      originalLength: trimmedText.length,
+      safeLength: safeText.length,
+    });
 
     const command = new SynthesizeSpeechCommand({
       Engine: "neural",
@@ -83,6 +95,7 @@ export async function POST(request: NextRequest) {
     });
 
     const result = await pollyClient.send(command);
+    console.log("[api/tts] Polly request succeeded");
     const stream = toReadableStream(result.AudioStream);
 
     return new NextResponse(stream, {
@@ -92,10 +105,20 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Error generating Polly audio", error);
-    return NextResponse.json(
-      { error: "Unable to synthesize speech" },
-      { status: 500 },
-    );
+    console.error("[api/tts] Error generating Polly audio", {
+      ...debugContext,
+      errorName: (error as Error)?.name,
+      errorMessage: (error as Error)?.message,
+      error,
+    });
+    const errorPayload = {
+      error: "Unable to synthesize speech",
+      detail: (error as Error)?.message ?? null,
+    };
+    console.warn("[api/tts] returning error response", {
+      ...debugContext,
+      status: 500,
+    });
+    return NextResponse.json(errorPayload, { status: 500 });
   }
 }
