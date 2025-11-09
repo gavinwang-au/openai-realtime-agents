@@ -120,6 +120,21 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       console.log('[Realtime transport]', event.type, event);
     }
     switch (event.type) {
+      case "response.input_audio_transcript.delta": {
+        historyHandlers.handleTranscriptionDelta({
+          item_id: event.item_id,
+          delta: event.delta,
+        });
+        break;
+      }
+      case "response.input_audio_transcript.done":
+      case "conversation.item.input_audio_transcription.completed": {
+        historyHandlers.handleTranscriptionCompleted({
+          item_id: event.item_id,
+          transcript: event.transcript,
+        });
+        break;
+      }
       case "response.output_text.delta": {
         historyHandlers.handleTranscriptionDelta({
           item_id: event.item_id,
