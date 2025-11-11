@@ -60,6 +60,8 @@ const webService = new sst.aws.Service(`${projectName}-ecs`, {
     AUTH_ISSUER_URL: auth.url,
     AUTH_API_CLIENT_ID: "jwt-api",
     OPENAI_API_KEY: secrets.OPENAI_API_KEY.value,
+    OPENAI_WEBHOOK_SECRET: secrets.OPENAI_WEBHOOK_SECRET.value,
+    REALTIME_MODEL:"gpt-realtime"
   },
   dev: {
     command: "pnpm --filter @openai-realtime-agents/web dev",
